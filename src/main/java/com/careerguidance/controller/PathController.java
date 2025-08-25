@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -37,11 +38,13 @@ public class PathController {
     }
 
     @GetMapping
+    @Transactional(readOnly = true)
     public List<LearningPath> list(Authentication auth) {
         return pathService.listForUser(currentUserId(auth));
     }
 
     @GetMapping("/{pathId}")
+    @Transactional(readOnly = true)
     public LearningPath getOne(@PathVariable Long pathId, Authentication auth) {
         return pathService.getByIdForUser(pathId, currentUserId(auth));
     }
