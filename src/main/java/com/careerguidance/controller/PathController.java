@@ -164,4 +164,15 @@ public class PathController {
         merged.addAll(newRemaining);
         return pathService.updatePath(pathId, currentUserId(auth), merged);
     }
+
+    @PutMapping("/{pathId}/items/{index}/notes")
+    public LearningPath updateItemNotes(
+            @PathVariable Long pathId,
+            @PathVariable int index,
+            @RequestBody Map<String,String> body,
+            Authentication auth
+    ) {
+        String notes = body.getOrDefault("notes", "");
+        return pathService.updateItemNotes(pathId, currentUserId(auth), index, notes);
+    }
 }

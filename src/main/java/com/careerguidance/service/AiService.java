@@ -102,4 +102,28 @@ public class AiService {
                 "{ topic, duration }.";
         return callGemini(prompt, true);
     }
+
+    public String chatTutor(List<Map<String,String>> messages) {
+        // messages: [{role:"user"|"assistant", content:"..."}]
+        StringBuilder convo = new StringBuilder();
+        for (Map<String,String> m : messages) {
+            String role = m.getOrDefault("role", "user");
+            String content = m.getOrDefault("content", "");
+            convo.append(role.toUpperCase()).append(": ").append(content).append("\n\n");
+        }
+        String prompt =
+                "You are an expert, friendly learning tutor. Be concise; use markdown when helpful.\n" +
+                        "Conversation so far:\n" + convo +
+                        "Now answer the user's latest question clearly and step-by-step when needed.";
+        return callGemini(prompt, false).path("text").asText();
+    }
+
+    public JsonNode analyzeSkillGap(String resumeText, String targetRole) {
+        String prompt =
+                "Given the user's resume below and the target role \"" + targetRole + "\", " +
+                        "list 6-10 missing or weak skill topics to study next. " +
+                        "Return JSON array of objects: { \"topic\": string, \"why\": string, \"duration\": number (days) }.\n\n" +
+                        "Resume:\n" + resumeText;
+        return callGemini(prompt, true);
+    }
 }
