@@ -4,6 +4,7 @@ import com.careerguidance.service.AiService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 import java.util.Map;
 
@@ -41,5 +42,21 @@ public class AiController {
     @PostMapping("/resources")
     public ResponseEntity<JsonNode> resources(@RequestBody Map<String, String> body) {
         return ResponseEntity.ok(ai.suggestResources(body.get("topic")));
+    }
+
+    @PostMapping("/chat")
+    public ResponseEntity<Map<String,String>> chat(@RequestBody Map<String, Object> body) {
+        // expects: { messages: [{ role, content }, ...] }
+        @SuppressWarnings("unchecked")
+        List<Map<String,String>> messages = (List<Map<String,String>>) body.get("messages");
+        String reply = ai.chatTutor(messages == null ? List.of() : messages);
+        return ResponseEntity.ok(Map.of("reply", reply));
+    }
+
+    @PostMapping("/skill-gap")
+    public ResponseEntity<JsonNode> skillGap(@RequestBody Map<String,String> body) {
+        String resumeText = body.getOrDefault("resume", "");
+        String role = body.getOrDefault("targetRole", "Software Engineer");
+        return ResponseEntity.ok(ai.analyzeSkillGap(resumeText, role));
     }
 }

@@ -8,13 +8,19 @@ public class PathItem {
     private int duration;           // days
     private String startDate;       // ISO yyyy-MM-dd
     private String endDate;         // ISO yyyy-MM-dd
-    private String status;          // pending/completed/failed
+    private String status;
+    // pending/completed/failed
 
     @Lob
     @Column(columnDefinition = "TEXT")
-    private String assessmentResult; // raw JSON string
+    private String assessmentResult;
+
+    @Column(columnDefinition = "text")
+    private String notes;// raw JSON string
 
     // getters & setters
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
     public String getTopic() { return topic; }
     public int getDuration() { return duration; }
     public String getStartDate() { return startDate; }
