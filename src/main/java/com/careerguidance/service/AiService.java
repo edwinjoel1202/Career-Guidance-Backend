@@ -7,7 +7,19 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+
+/*
+ Enhanced AiService: keeps your existing Gemini REST wiring and adds:
+  - chatTutor (multi-turn)
+  - analyzeSkillGap (resume -> gap)
+  - mockInterview generation
+  - generateFlashcards
+  - generateCodingExercise
+  - NOTE: This continues to call the same Gemini endpoint you used before.
+  - Ensure application.properties has ai.gemini.apiKey and ai.gemini.model
+*/
 
 @Service
 public class AiService {
@@ -63,67 +75,76 @@ public class AiService {
         }
     }
 
+    // Existing: generate learning path as JSON array
     public JsonNode generateLearningPath(String domain) {
         String prompt = "Create a detailed, structured learning path for a beginner in \"" + domain + "\". " +
-                "The path should be a JSON array; each item has keys: topic (string) and duration (number days).";
+                "Return a JSON array; each item: {\"topic\":\"...\",\"duration\":<days>} ";
         return callGemini(prompt, true);
     }
 
+    // Existing: generate assessment
     public JsonNode generateAssessment(String topic) {
         String prompt = "Create a short assessment with 5 multiple-choice questions for the topic \"" + topic + "\". " +
-                "Each question has 4 options (A,B,C,D) and one correct answer. Return a JSON array of objects: " +
-                "{ question, options: {A,B,C,D}, answer }.";
+                "Each question should have 4 options (A,B,C,D) and one correct answer. Return JSON array: {question, options:{A,B,C,D}, answer}.";
         return callGemini(prompt, true);
     }
 
+    // Existing: evaluate assessment submission
     public JsonNode evaluateAssessment(String topic, String submissionJson) {
-        // Note: For multiple-choice, could compute score directly, but keeping AI for potential open-ended questions
-        String prompt = "As an expert evaluator, analyze the following quiz submission. The user was tested on \"" + topic + "\". " +
-                "Submission JSON: " + submissionJson + ". " +
-                "Return JSON object: { \"score\": number, \"evaluation\": [{question, correctAnswer, userAnswer, isCorrect}] }";
+        String prompt = "You are an expert evaluator. Topic: \"" + topic + "\". User submission JSON: " + submissionJson + ". " +
+                "Return JSON {\"score\": number, \"evaluation\": [{\"question\":..., \"correctAnswer\":..., \"userAnswer\":..., \"isCorrect\":true|false}, ...] }";
         return callGemini(prompt, true);
     }
 
+    // Explain human-friendly (string)
     public String explainTopic(String domain, String topic) {
-        String prompt = "Explain the concept of \"" + topic + "\" for a beginner in the field of " + domain + ". " +
-                "Keep it concise, easy to understand, and use paragraphs.";
+        String prompt = "Explain \"" + topic + "\" for a beginner in " + domain + ". Keep it concise and clear in 3 short paragraphs.";
         return callGemini(prompt, false).path("text").asText();
     }
 
     public JsonNode suggestResources(String topic) {
-        String prompt = "Suggest 3-5 high-quality online resources for a beginner learning about \"" + topic + "\". " +
-                "Return a JSON array of { title, type, description }.";
+        String prompt = "Suggest 3 high-quality resources for \"" + topic + "\". Return JSON array [{\"title\":\"...\",\"type\":\"(article/course/video)\",\"url\":\"...\",\"description\":\"...\"}] - include a url if possible.";
         return callGemini(prompt, true);
     }
 
     public JsonNode regenerateSchedule(List<String> remainingTopics) {
-        String prompt = "I have a list of remaining topics to learn: " + remainingTopics + ". " +
-                "Create a new learning schedule starting from today. Return a JSON array of objects: " +
-                "{ topic, duration }.";
+        String prompt = "I have remaining topics: " + remainingTopics + ". Create a schedule starting today and return JSON array [{\"topic\":\"...\",\"duration\":<days>}].";
         return callGemini(prompt, true);
     }
 
-    public String chatTutor(List<Map<String,String>> messages) {
-        // messages: [{role:"user"|"assistant", content:"..."}]
-        StringBuilder convo = new StringBuilder();
-        for (Map<String,String> m : messages) {
-            String role = m.getOrDefault("role", "user");
-            String content = m.getOrDefault("content", "");
-            convo.append(role.toUpperCase()).append(": ").append(content).append("\n\n");
+    // New: chat tutor (expects list of messages as role/content). We'll stringify for Gemini.
+    public String chatTutor(List<Map<String, String>> messages) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are a helpful study tutor. Keep responses friendly and brief.\n");
+        for (Map<String, String> m : messages) {
+            sb.append(m.getOrDefault("role", "user")).append(": ").append(m.getOrDefault("content", "")).append("\n");
         }
-        String prompt =
-                "You are an expert, friendly learning tutor. Be concise; use markdown when helpful.\n" +
-                        "Conversation so far:\n" + convo +
-                        "Now answer the user's latest question clearly and step-by-step when needed.";
-        return callGemini(prompt, false).path("text").asText();
+        sb.append("Assistant:");
+        return callGemini(sb.toString(), false).path("text").asText();
     }
 
+    // New: analyze resume text and return skill gap JSON
     public JsonNode analyzeSkillGap(String resumeText, String targetRole) {
-        String prompt =
-                "Given the user's resume below and the target role \"" + targetRole + "\", " +
-                        "list 6-10 missing or weak skill topics to study next. " +
-                        "Return JSON array of objects: { \"topic\": string, \"why\": string, \"duration\": number (days) }.\n\n" +
-                        "Resume:\n" + resumeText;
+        String prompt = "You are a career analyst. User resume: " + resumeText + ". Target role: " + targetRole + ". " +
+                "Return JSON {\"missingSkills\":[{\"skill\":\"...\",\"importance\":\"high|medium|low\",\"suggestedResources\":[...] }], \"recommendedPath\":[{\"topic\":\"...\",\"duration\":days}]}";
+        return callGemini(prompt, true);
+    }
+
+    // New: generate mock interview (questions + difficulty + followups)
+    public JsonNode generateMockInterview(String targetRole, int rounds) {
+        String prompt = "Generate " + rounds + " interview questions for role: " + targetRole + ". For each: {question, difficulty: 'easy'|'medium'|'hard', followups:[...]} Return JSON array.";
+        return callGemini(prompt, true);
+    }
+
+    // New: generate flashcards
+    public JsonNode generateFlashcards(String topic, int count) {
+        String prompt = "Create " + count + " flashcards for topic \"" + topic + "\". Return JSON array [{\"q\":\"...\",\"a\":\"...\"}].";
+        return callGemini(prompt, true);
+    }
+
+    // New: generate coding exercise with testcases (warning: only generate; do NOT run arbitrary code)
+    public JsonNode generateCodingExercise(String topic) {
+        String prompt = "Generate a coding exercise suitable for interview practice about \"" + topic + "\". Return JSON {\"title\",\"description\",\"functionSignature\",\"language\":\"java|python|js\",\"testcases\":[{\"input\":\"...\",\"output\":\"...\"}]}";
         return callGemini(prompt, true);
     }
 }
