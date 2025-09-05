@@ -96,8 +96,31 @@ public class PathController {
             var result = ai.evaluateAssessment(item.getTopic(), submissionJson);
 
             int score = result.path("score").asInt(0);
+            int outOf = result.path("outOf").asInt(10);
+            double percentage = outOf == 0 ? 0 : (100.0 * score / outOf);
+
+            // Save assessment record
+            // Note: requires AssessmentRepository - autowire it in controller if needed
             item.setAssessmentResult(result.toString());
-            item.setStatus(score >= 60 ? "completed" : "failed");
+
+            // Passing criteria: 7 correct out of 10 (or >=70% if different count)
+            boolean passed;
+            if (outOf >= 10) {
+                passed = score >= 7;
+            } else {
+                passed = percentage >= 70.0;
+            }
+
+            if (passed) {
+                item.setStatus("completed");
+                // move to next topic automatically: mark next as pending (if exists)
+                if (topicIndex + 1 < lp.getPath().size()) {
+                    lp.getPath().get(topicIndex + 1).setStatus("pending");
+                }
+            } else {
+                item.setStatus("failed");
+                // keep same topic as pending/failed; user must retake
+            }
 
             return pathService.updatePath(pathId, currentUserId(auth), lp.getPath());
         } catch (Exception e) {
